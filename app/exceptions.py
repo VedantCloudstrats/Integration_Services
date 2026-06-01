@@ -110,9 +110,11 @@ async def pydantic_validation_handler(
     request: Request, exc: PydanticValidationError
 ) -> JSONResponse:
     errors = [
-        f"{' → '.join(str(l) for l in e['loc'])}: {e['msg']}" for e in exc.errors()
+        f"{' → '.join(str(loc_item) for loc_item in err['loc'])}: {err['msg']}"
+        for err in exc.errors()
     ]
     return _error_response(422, "Validation Error", "; ".join(errors))
+
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

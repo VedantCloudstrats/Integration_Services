@@ -1,10 +1,14 @@
-from fastapi import Header, HTTPException, status
+from fastapi import HTTPException, Security, status
+from fastapi.security import APIKeyHeader
+
 from app.config import settings
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-async def verify_api_key(x_api_key: str = Header(None)) -> str:
-    """
-    Verifies the X-API-Key request header.
+
+async def verify_api_key(x_api_key: str = Security(api_key_header)) -> str:
+    """Verifies the X-API-Key request header.
+
     Returns 401 if missing, 403 if invalid.
     """
     if not x_api_key:
@@ -18,3 +22,4 @@ async def verify_api_key(x_api_key: str = Header(None)) -> str:
             detail="Invalid API Key. Access denied.",
         )
     return x_api_key
+

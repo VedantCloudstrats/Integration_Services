@@ -28,13 +28,17 @@ X-API-Key: dev-secret-key
 Missing keys return `401 Unauthorized`. Invalid keys return `403 Forbidden`.
 The key is configured through `API_KEY` in `.env`.
 
+Developers can authorize directly on the interactive `/docs` Swagger UI page by clicking **Authorize** and inputting the API key.
+
 ## API Prefix
 
-All CMMS routes are mounted under:
+All CMMS routes are primary mounted under the versioned prefix:
 
 ```text
-/api/cmms
+/api/v1/cmms
 ```
+
+A backward-compatible legacy prefix `/api/cmms` is also exposed for current integrations but is considered deprecated.
 
 ## Modules
 

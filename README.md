@@ -10,15 +10,28 @@ cd C:\Users\vedantrbhosale\Desktop\backend_Integration_Services
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
 
-## Authentication
+## API Versioning
 
-All application endpoints require:
+All API endpoints are versioned and exposed under:
 
-```http
-X-API-Key: dev-secret-key
+```text
+/api/v1/cmms/...
 ```
 
-Configure the key with `API_KEY` in `.env`. Use `.env.example` as the template.
+For backward compatibility, the legacy endpoints under `/api/cmms/...` are also supported but deprecated.
+
+## Authentication & Documentation
+
+All application endpoints require API Key verification. 
+
+- **Header Name**: `X-API-Key`
+- **Default Key**: `dev-secret-key` (Configure with `API_KEY` in `.env`)
+
+The interactive API documentation is accessible at:
+- **Swagger UI**: `/docs`
+- **ReDoc**: `/redoc`
+
+The `/docs` page is publicly accessible and features an **Authorize** button. You can click it, enter your API key (e.g. `dev-secret-key`), and test all the endpoints directly from the browser.
 
 ## Development
 
@@ -26,3 +39,4 @@ Configure the key with `API_KEY` in `.env`. Use `.env.example` as the template.
 python -m black app tests run.py
 python -m pytest
 ```
+

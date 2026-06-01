@@ -72,3 +72,55 @@ def test_post_endpoint_validates_and_acknowledges_payload():
         "message": "Routine completion payload validated successfully.",
         "data": {"routine_id": 101},
     }
+
+
+def test_v1_get_payload_endpoint_requires_api_key():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/cmms/dart")
+
+    assert response.status_code == 401
+
+
+def test_v1_get_payload_endpoint_returns_empty_stateless_response():
+    client = TestClient(app)
+
+    response = client.get("/api/v1/cmms/dart", headers=API_KEY_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["T_DART"] == []
+
+
+def test_v1_post_endpoint_validates_and_acknowledges_payload():
+    client = TestClient(app)
+    payload = {
+        "routine_id": 102,
+        "old_dart_number": "DART-OLD",
+        "new_dart_number": "DART-NEW",
+        "hours": 1,
+        "minutes": 15,
+    }
+
+    response = client.post(
+        "/api/v1/cmms/routines/complete",
+        json=payload,
+        headers=API_KEY_HEADERS,
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "success": True,
+        "message": "Routine completion payload validated successfully.",
+        "data": {"routine_id": 102},
+    }
+
+
+def test_openapi_docs_accessible_without_api_key():
+    client = TestClient(app)
+
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+
+    response = client.get("/docs")
+    assert response.status_code == 200
+

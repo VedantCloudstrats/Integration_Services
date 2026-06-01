@@ -4,7 +4,7 @@ SWMM CMMS Integration - FastAPI Microservice
 Stateless service: handles API routing and request/response validation only.
 """
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError as PydanticValidationError
@@ -38,7 +38,6 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         docs_url="/docs",
         redoc_url="/redoc",
-        dependencies=[Depends(verify_api_key)],
     )
 
     app.add_middleware(
@@ -55,17 +54,30 @@ def create_app() -> FastAPI:
     app.add_exception_handler(PydanticValidationError, pydantic_validation_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
-    prefix = "/api"
-    app.include_router(cmms_dart.router, prefix=prefix)
-    app.include_router(cmms_srar.router, prefix=prefix)
-    app.include_router(cmms_fuss.router, prefix=prefix)
-    app.include_router(cmms_aber.router, prefix=prefix)
-    app.include_router(cmms_sfd.router, prefix=prefix)
-    app.include_router(cmms_refit.router, prefix=prefix)
-    app.include_router(cmms_opdef.router, prefix=prefix)
-    app.include_router(cmms_maintop.router, prefix=prefix)
+    # Consolidate all CMMS routers
+    api_router = APIRouter()
+    api_router.include_router(cmms_dart.router)
+    api_router.include_router(cmms_srar.router)
+    api_router.include_router(cmms_fuss.router)
+    api_router.include_router(cmms_aber.router)
+    api_router.include_router(cmms_sfd.router)
+    api_router.include_router(cmms_refit.router)
+    api_router.include_router(cmms_opdef.router)
+    api_router.include_router(cmms_maintop.router)
 
-    @app.get("/", tags=["Health"])
+    # Register under both the versioned /api/v1 and legacy /api prefixes, securing both
+    app.include_router(
+        api_router,
+        prefix="/api/v1",
+        dependencies=[Depends(verify_api_key)],
+    )
+    app.include_router(
+        api_router,
+        prefix="/api",
+        dependencies=[Depends(verify_api_key)],
+    )
+
+    @app.get("/", tags=["Health"], dependencies=[Depends(verify_api_key)])
     async def root():
         return {
             "service": settings.app_title,
@@ -75,7 +87,7 @@ def create_app() -> FastAPI:
             "docs": "/docs",
         }
 
-    @app.get("/health", tags=["Health"])
+    @app.get("/health", tags=["Health"], dependencies=[Depends(verify_api_key)])
     async def health():
         return {"status": "healthy", "mode": "stateless-validation"}
 
@@ -83,3 +95,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
