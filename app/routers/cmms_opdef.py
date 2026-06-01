@@ -3,9 +3,8 @@
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, File, Form, UploadFile, status
 
-from app.dependencies import verify_api_key
 from app.schemas.all_schemas import (
     GenericSuccessResponse,
     OpdefAnalysisRequest,
@@ -21,11 +20,12 @@ from app.schemas.all_schemas import (
 router = APIRouter(
     prefix="/cmms",
     tags=["OPDEF - Operational Defect"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/opdef", response_model=OpdefSyncPayloadResponse, summary="Full OPDEF sync payload")
+@router.get(
+    "/opdef", response_model=OpdefSyncPayloadResponse, summary="Full OPDEF sync payload"
+)
 async def get_opdef_payload():
     """Return an empty OPDEF sync payload."""
     return OpdefSyncPayloadResponse()

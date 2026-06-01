@@ -2,19 +2,23 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.dependencies import verify_api_key
-from app.schemas.all_schemas import GenericSuccessResponse, SRARBulkCreate, SRARDetailResponse
+from app.schemas.all_schemas import (
+    GenericSuccessResponse,
+    SRARBulkCreate,
+    SRARDetailResponse,
+)
 
 router = APIRouter(
     prefix="/cmms",
     tags=["SRAR - Ship Running Assessment"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/srar", response_model=List[SRARDetailResponse], summary="List all SRAR reports")
+@router.get(
+    "/srar", response_model=List[SRARDetailResponse], summary="List all SRAR reports"
+)
 async def get_srar_list():
     """Return an empty SRAR list. This service does not read from a database."""
     return []

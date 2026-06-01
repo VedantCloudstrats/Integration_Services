@@ -4,12 +4,13 @@ SWMM CMMS Integration - FastAPI Microservice
 Stateless service: handles API routing and request/response validation only.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError as PydanticValidationError
 
 from app.config import settings
+from app.dependencies import verify_api_key
 from app.exceptions import (
     AppBaseException,
     app_exception_handler,
@@ -37,6 +38,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         docs_url="/docs",
         redoc_url="/redoc",
+        dependencies=[Depends(verify_api_key)],
     )
 
     app.add_middleware(

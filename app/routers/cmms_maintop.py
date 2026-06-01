@@ -1,8 +1,7 @@
 """MAINTOP Router - Maintenance Procedure sync endpoints."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.dependencies import verify_api_key
 from app.schemas.all_schemas import (
     MaintopDistributionRequest,
     MaintopDistributionResponse,
@@ -15,11 +14,14 @@ from app.schemas.all_schemas import (
 router = APIRouter(
     prefix="/cmms",
     tags=["MAINTOP - Maintenance Procedures"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.post("/maintop/sync", response_model=MaintopSyncResponse, summary="Validate MAINTOP headers and details")
+@router.post(
+    "/maintop/sync",
+    response_model=MaintopSyncResponse,
+    summary="Validate MAINTOP headers and details",
+)
 async def sync_maintop(payload: MaintopSyncRequest):
     """Validate MAINTOP headers/details and report received counts."""
     return MaintopSyncResponse(
@@ -29,7 +31,9 @@ async def sync_maintop(payload: MaintopSyncRequest):
     )
 
 
-@router.post("/maintop/jic", response_model=MaintopJICResponse, summary="Validate JIC data")
+@router.post(
+    "/maintop/jic", response_model=MaintopJICResponse, summary="Validate JIC data"
+)
 async def sync_jic(payload: MaintopJICRequest):
     """Validate JIC, spares, tools, and attachments payloads."""
     return MaintopJICResponse(
@@ -41,7 +45,11 @@ async def sync_jic(payload: MaintopJICRequest):
     )
 
 
-@router.post("/maintop/distribution", response_model=MaintopDistributionResponse, summary="Validate distribution data")
+@router.post(
+    "/maintop/distribution",
+    response_model=MaintopDistributionResponse,
+    summary="Validate distribution data",
+)
 async def sync_distribution(payload: MaintopDistributionRequest):
     """Validate MAINTOP distribution payloads and report received counts."""
     return MaintopDistributionResponse(

@@ -2,19 +2,25 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.dependencies import verify_api_key
-from app.schemas.all_schemas import AberEquipmentResponse, AberSubmitRequest, AberSubmitResponse
+from app.schemas.all_schemas import (
+    AberEquipmentResponse,
+    AberSubmitRequest,
+    AberSubmitResponse,
+)
 
 router = APIRouter(
     prefix="/cmms",
     tags=["ABER - Annual Budget Estimate"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/aber", response_model=List[AberEquipmentResponse], summary="Equipment eligible for ABER")
+@router.get(
+    "/aber",
+    response_model=List[AberEquipmentResponse],
+    summary="Equipment eligible for ABER",
+)
 async def get_aber_equipment():
     """Return an empty ABER equipment list."""
     return []
@@ -41,7 +47,11 @@ async def submit_aber_estimate(payload: AberSubmitRequest):
     )
 
 
-@router.get("/aber/history", response_model=List[AberSubmitResponse], summary="ABER estimate history")
+@router.get(
+    "/aber/history",
+    response_model=List[AberSubmitResponse],
+    summary="ABER estimate history",
+)
 async def get_aber_history(ship_id: Optional[str] = None, year: Optional[int] = None):
     """Return an empty ABER history list. Query params are still validated."""
     return []

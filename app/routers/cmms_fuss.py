@@ -2,9 +2,8 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.dependencies import verify_api_key
 from app.schemas.all_schemas import (
     FussMastersResponse,
     FussRaiseRequest,
@@ -15,11 +14,12 @@ from app.schemas.all_schemas import (
 router = APIRouter(
     prefix="/cmms",
     tags=["FUSS - Deferment"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/fuss", response_model=FussSyncPayloadResponse, summary="FUSS sync payload")
+@router.get(
+    "/fuss", response_model=FussSyncPayloadResponse, summary="FUSS sync payload"
+)
 async def get_fuss_sync_payload():
     """Return an empty FUSS sync payload."""
     return FussSyncPayloadResponse()
@@ -41,7 +41,9 @@ async def raise_deferment(payload: FussRaiseRequest):
     )
 
 
-@router.get("/fuss/masters", response_model=FussMastersResponse, summary="FUSS master tables")
+@router.get(
+    "/fuss/masters", response_model=FussMastersResponse, summary="FUSS master tables"
+)
 async def get_fuss_masters():
     """Return empty FUSS master lookup tables."""
     return FussMastersResponse()

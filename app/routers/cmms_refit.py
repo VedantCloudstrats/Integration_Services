@@ -2,9 +2,8 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.dependencies import verify_api_key
 from app.schemas.all_schemas import (
     GenericSuccessResponse,
     RefitCompletionCreate,
@@ -18,11 +17,12 @@ from app.schemas.all_schemas import (
 router = APIRouter(
     prefix="/cmms",
     tags=["Refit - Refit Integration"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/refit", response_model=RefitSyncPayloadResponse, summary="Refit sync payload")
+@router.get(
+    "/refit", response_model=RefitSyncPayloadResponse, summary="Refit sync payload"
+)
 async def get_refit_payload():
     """Return an empty refit sync payload."""
     return RefitSyncPayloadResponse()

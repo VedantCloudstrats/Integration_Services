@@ -2,19 +2,23 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.dependencies import verify_api_key
-from app.schemas.all_schemas import ShipEquipmentResponse, SfdShipResponse, SfdSyncPayloadResponse
+from app.schemas.all_schemas import (
+    ShipEquipmentResponse,
+    SfdShipResponse,
+    SfdSyncPayloadResponse,
+)
 
 router = APIRouter(
     prefix="/cmms",
     tags=["SFD - Ship Fit Database"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/sfd", response_model=List[ShipEquipmentResponse], summary="List ship equipment")
+@router.get(
+    "/sfd", response_model=List[ShipEquipmentResponse], summary="List ship equipment"
+)
 async def get_sfd_equipments(ship_id: Optional[int] = None):
     """Return an empty equipment list. Query params are still validated by FastAPI."""
     return []
@@ -26,7 +30,11 @@ async def get_sfd_ships():
     return []
 
 
-@router.get("/sfd/payload", response_model=SfdSyncPayloadResponse, summary="Full SFD sync payload")
+@router.get(
+    "/sfd/payload",
+    response_model=SfdSyncPayloadResponse,
+    summary="Full SFD sync payload",
+)
 async def get_sfd_payload():
     """Return an empty SFD sync payload."""
     return SfdSyncPayloadResponse()

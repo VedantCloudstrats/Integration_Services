@@ -1,1 +1,1 @@
-# fast_api package init
+"""Integration services package."""

@@ -3,13 +3,14 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError as PydanticValidationError
 
-
 # ─────────────────────────────────────────────
 # Custom exception classes
 # ─────────────────────────────────────────────
 
+
 class AppBaseException(Exception):
     """Base class for all application exceptions."""
+
     status_code: int = 500
     error: str = "Internal Server Error"
 
@@ -52,6 +53,7 @@ class BadRequestError(AppBaseException):
 # Standard error response builder
 # ─────────────────────────────────────────────
 
+
 def _error_response(status_code: int, error: str, detail: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -67,7 +69,10 @@ def _error_response(status_code: int, error: str, detail: str) -> JSONResponse:
 # Exception handlers — register on FastAPI app
 # ─────────────────────────────────────────────
 
-async def app_exception_handler(request: Request, exc: AppBaseException) -> JSONResponse:
+
+async def app_exception_handler(
+    request: Request, exc: AppBaseException
+) -> JSONResponse:
     return _error_response(exc.status_code, exc.error, exc.detail)
 
 
@@ -88,7 +93,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return _error_response(exc.status_code, error, detail)
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     # Flatten all field errors into a human-readable string
     errors = []
     for err in exc.errors():
@@ -99,10 +106,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return _error_response(422, "Validation Error", detail)
 
 
-async def pydantic_validation_handler(request: Request, exc: PydanticValidationError) -> JSONResponse:
-    errors = [f"{' → '.join(str(l) for l in e['loc'])}: {e['msg']}" for e in exc.errors()]
+async def pydantic_validation_handler(
+    request: Request, exc: PydanticValidationError
+) -> JSONResponse:
+    errors = [
+        f"{' → '.join(str(l) for l in e['loc'])}: {e['msg']}" for e in exc.errors()
+    ]
     return _error_response(422, "Validation Error", "; ".join(errors))
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    return _error_response(500, "Internal Server Error", f"An unexpected error occurred: {type(exc).__name__}")
+    return _error_response(
+        500,
+        "Internal Server Error",
+        f"An unexpected error occurred: {type(exc).__name__}",
+    )

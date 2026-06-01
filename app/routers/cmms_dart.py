@@ -3,9 +3,8 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, File, Form, UploadFile, status
 
-from app.dependencies import verify_api_key
 from app.schemas.all_schemas import (
     CmmsDartPayloadResponse,
     CompletedRoutineCreate,
@@ -19,11 +18,12 @@ from app.schemas.all_schemas import (
 router = APIRouter(
     prefix="/cmms",
     tags=["DART - Defect Tracking"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 
-@router.get("/dart", response_model=CmmsDartPayloadResponse, summary="Full DART sync payload")
+@router.get(
+    "/dart", response_model=CmmsDartPayloadResponse, summary="Full DART sync payload"
+)
 async def get_dart_payload():
     """Return an empty DART sync payload."""
     return CmmsDartPayloadResponse()
@@ -39,7 +39,9 @@ async def get_defects(
     return []
 
 
-@router.get("/defects/{defect_id}", response_model=DefectResponse, summary="Get defect by ID")
+@router.get(
+    "/defects/{defect_id}", response_model=DefectResponse, summary="Get defect by ID"
+)
 async def get_defect(defect_id: int):
     """Return a validation-only defect representation for the requested ID."""
     return DefectResponse(id=defect_id)
@@ -68,7 +70,11 @@ async def create_defect(payload: DefectCreate):
     )
 
 
-@router.post("/defects/{defect_id}/rectify", response_model=GenericSuccessResponse, summary="Validate defect rectification")
+@router.post(
+    "/defects/{defect_id}/rectify",
+    response_model=GenericSuccessResponse,
+    summary="Validate defect rectification",
+)
 async def rectify_defect(defect_id: int, payload: DefectRectifyRequest):
     """Validate a defect rectification payload and acknowledge receipt."""
     return GenericSuccessResponse(
@@ -78,7 +84,11 @@ async def rectify_defect(defect_id: int, payload: DefectRectifyRequest):
     )
 
 
-@router.get("/routines/completed", response_model=List[CompletedRoutineResponse], summary="List completed routines")
+@router.get(
+    "/routines/completed",
+    response_model=List[CompletedRoutineResponse],
+    summary="List completed routines",
+)
 async def get_completed_routines():
     """Return an empty completed routines list."""
     return []

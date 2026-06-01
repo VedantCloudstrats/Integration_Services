@@ -7,10 +7,10 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 from datetime import date, datetime
 
-
 # ─────────────────────────────────────────────────────────────
 # COMMON
 # ─────────────────────────────────────────────────────────────
+
 
 class GenericSuccessResponse(BaseModel):
     success: bool
@@ -27,6 +27,7 @@ class ErrorResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # DART
 # ─────────────────────────────────────────────────────────────
+
 
 class DefectCreate(BaseModel):
     symptom_code_id: Optional[int] = None
@@ -98,6 +99,7 @@ class CmmsDartPayloadResponse(BaseModel):
 # SRAR
 # ─────────────────────────────────────────────────────────────
 
+
 class SRARMonthlyHeaderCreate(BaseModel):
     ship_id: Optional[int] = None
     srar_month: int
@@ -150,6 +152,7 @@ class SRARBulkCreate(BaseModel):
 # COMPLETED ROUTINES
 # ─────────────────────────────────────────────────────────────
 
+
 class CompletedRoutineCreate(BaseModel):
     routine_id: int
     old_dart_number: Optional[str] = ""
@@ -182,6 +185,7 @@ class CompletedRoutineResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # FUSS
 # ─────────────────────────────────────────────────────────────
+
 
 class FussRaiseRequest(BaseModel):
     routine_description_id: int
@@ -259,6 +263,7 @@ class FussMastersResponse(BaseModel):
 # ABER
 # ─────────────────────────────────────────────────────────────
 
+
 class AberEquipmentResponse(BaseModel):
     id: int
     nomenclature: str
@@ -299,6 +304,7 @@ class AberSubmitResponse(BaseModel):
 # SFD
 # ─────────────────────────────────────────────────────────────
 
+
 class ShipEquipmentResponse(BaseModel):
     id: int
     nomenclature: Optional[str] = None
@@ -336,6 +342,7 @@ class SfdSyncPayloadResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # REFIT
 # ─────────────────────────────────────────────────────────────
+
 
 class RefitCompletionCreate(BaseModel):
     ship_code: str
@@ -388,6 +395,7 @@ class RefitSyncPayloadResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # OPDEF
 # ─────────────────────────────────────────────────────────────
+
 
 class OpdefInitiateRequest(BaseModel):
     ship_id: int
@@ -456,6 +464,7 @@ class OpdefSyncPayloadResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────
 # MAINTOP
 # ─────────────────────────────────────────────────────────────
+
 
 class MaintopHeaderSyncItem(BaseModel):
     MaintopID: int
