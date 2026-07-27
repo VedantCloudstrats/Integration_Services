@@ -39,8 +39,12 @@ from .serializers import (
     CMMS_T_EquipmentShipDetailIngestSerializer,
 )
 
+import threading
+
 logger = logging.getLogger("integration.sync")
 LOCK_KEY = "cmms_sync_in_progress_lock"
+_IN_MEMORY_SYNC_LOCK = threading.Lock()
+_IN_MEMORY_SYNC_ACTIVE = False
 
 
 def _base_audit_defaults():
@@ -1000,6 +1004,7 @@ def run_unified_sync(steps=None):
         overall status ("success" | "partial" | "failed" | "in_progress"),
         and a high-level summary counter.
     """
+    global _IN_MEMORY_SYNC_ACTIVE
     import uuid
     import time
     from datetime import datetime, timezone
@@ -1011,18 +1016,43 @@ def run_unified_sync(steps=None):
         steps = [s for s in steps if s in allowed_steps]
 
     # ── Concurrency guard ────────────────────────────────────────────────────
-    lock_acquired = True
-    try:
-        lock_acquired = cache.add(LOCK_KEY, "true", timeout=900)
-    except Exception as exc:
-        logger.warning(f"Cache lock check encountered exception: {exc}. Continuing sync execution.")
-
-    if not lock_acquired:
-        logger.warning("Unified sync requested but a sync is already in progress.")
+    if _IN_MEMORY_SYNC_ACTIVE:
+        logger.warning("Unified sync requested but an in-memory sync is already running.")
         return {
             "status": "in_progress",
             "message": "Synchronization is already in progress. Please try again later.",
         }
+
+    redis_lock_acquired = False
+    try:
+        redis_lock_acquired = cache.add(LOCK_KEY, "true", timeout=900)
+        if not redis_lock_acquired:
+            # Check if key is actually present in cache (versus IGNORE_EXCEPTIONS fallback)
+            lock_val = cache.get(LOCK_KEY)
+            if lock_val is not None:
+                logger.warning("Unified sync requested but a sync is already in progress in Redis.")
+                return {
+                    "status": "in_progress",
+                    "message": "Synchronization is already in progress. Please try again later.",
+                }
+            else:
+                redis_lock_acquired = True
+    except Exception as exc:
+        logger.warning(f"Cache lock check encountered exception: {exc}. Continuing sync execution.")
+        redis_lock_acquired = True
+
+    with _IN_MEMORY_SYNC_LOCK:
+        if _IN_MEMORY_SYNC_ACTIVE:
+            if redis_lock_acquired:
+                try:
+                    cache.delete(LOCK_KEY)
+                except Exception:
+                    pass
+            return {
+                "status": "in_progress",
+                "message": "Synchronization is already in progress. Please try again later.",
+            }
+        _IN_MEMORY_SYNC_ACTIVE = True
 
     sync_id = str(uuid.uuid4())
     wall_start = time.time()
@@ -1157,6 +1187,7 @@ def run_unified_sync(steps=None):
         }
 
     finally:
+        _IN_MEMORY_SYNC_ACTIVE = False
         try:
             cache.delete(LOCK_KEY)
         except Exception:
