@@ -24,7 +24,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import services
-from integrationservices.services import run_unified_sync, get_sync_status_summary
+from integrationservices.services import run_unified_sync
+from sfd.models import SFDTransaction, ChangeEquipmentRequest, RemoveEquipmentRequest
 
 app = FastAPI(
     title="SWMM Integration Services API",
@@ -45,15 +46,43 @@ app.add_middleware(
 @app.get("/status", summary="Check Integration & Synchronization Status")
 def get_status():
     """
-    Returns health status and detailed synchronization summary matching UI requirements:
-      - Last Sync Date (e.g. "18-Jul-2026")
-      - Last Sync Time (e.g. "Last Sync - 0630 hrs")
-      - Elapsed Time since Last Sync (e.g. "9 days 5 hours ago")
-      - Sync in Queue count
-      - Not Sync count
-      - Itemized pending synchronization feeds list
+    Returns health status and current count of unsynced / in-progress records in SWMM.
     """
-    return get_sync_status_summary()
+    unsynced_tx = SFDTransaction.objects.filter(is_synced=0).count()
+    unsynced_cr = ChangeEquipmentRequest.objects.filter(is_synced=0).count()
+    unsynced_rr = RemoveEquipmentRequest.objects.filter(is_synced=0).count()
+
+    in_progress_tx = SFDTransaction.objects.filter(is_synced=2).count()
+    in_progress_cr = ChangeEquipmentRequest.objects.filter(is_synced=2).count()
+    in_progress_rr = RemoveEquipmentRequest.objects.filter(is_synced=2).count()
+
+    total_unsynced = unsynced_tx + unsynced_cr + unsynced_rr
+    total_in_progress = in_progress_tx + in_progress_cr + in_progress_rr
+
+    sync_status = "synced"
+    if total_in_progress > 0:
+        sync_status = "in_progress"
+    elif total_unsynced > 0:
+        sync_status = "not_synced"
+
+    return {
+        "status": "active",
+        "message": "Integration Services is up and running.",
+        "app": "integrationservices",
+        "sync_status": sync_status,
+        "unsynced_counts": {
+            "T_EquipmentShipDetail": unsynced_tx,
+            "T_SFDChangeRequest": unsynced_cr,
+            "Ch_SFD_Remove_Equipment_Request": unsynced_rr,
+        },
+        "in_progress_counts": {
+            "T_EquipmentShipDetail": in_progress_tx,
+            "T_SFDChangeRequest": in_progress_cr,
+            "Ch_SFD_Remove_Equipment_Request": in_progress_rr,
+        },
+        "total_unsynced": total_unsynced,
+        "total_in_progress": total_in_progress,
+    }
 
 
 @app.post("/sync", summary="Unified SWMM–CMMS Synchronization API")
