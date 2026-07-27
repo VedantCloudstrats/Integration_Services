@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from django.db.models import Max
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
@@ -1116,6 +1117,24 @@ def run_unified_sync(steps=None):
             f"pushed={transactions_pushed} approvals={approvals_pulled}"
         )
 
+        LAST_SYNC_CACHE_KEY = "cmms_last_sync_info"
+        if overall_status in ("success", "partial"):
+            try:
+                cache.set(
+                    LAST_SYNC_CACHE_KEY,
+                    {
+                        "timestamp": completed_at,
+                        "sync_id": sync_id,
+                        "status": overall_status,
+                        "masters_synced": masters_synced,
+                        "transactions_pushed": transactions_pushed,
+                        "approvals_pulled": approvals_pulled,
+                    },
+                    timeout=None,
+                )
+            except Exception as cache_err:
+                logger.warning(f"Failed to record last sync info in cache: {cache_err}")
+
         return {
             "sync_id": sync_id,
             "started_at": started_at,
@@ -1160,3 +1179,167 @@ def run_complete_sync():
     continue to work without modification.
     """
     return run_unified_sync(steps=["masters", "push", "approvals"])
+
+
+def get_sync_status_summary():
+    """
+    Returns detailed synchronization status summary matching the UI requirements:
+      - Last Sync Date (e.g. "18-Jul-2026")
+      - Last Sync Time (e.g. "Last Sync - 0630 hrs")
+      - Elapsed Time since Last Sync (e.g. "9 days 5 hours ago" / "15 mins ago")
+      - Sync in Queue (count of in-progress/queued records, is_synced=2)
+      - Not Sync (count of unsynced/failed records, is_synced=0)
+      - Itemized Pending Synchronization feeds list matching UI design
+    """
+    LAST_SYNC_CACHE_KEY = "cmms_last_sync_info"
+    last_info = None
+    try:
+        last_info = cache.get(LAST_SYNC_CACHE_KEY)
+    except Exception:
+        pass
+
+    now_utc = datetime.now(timezone.utc)
+
+    if last_info and isinstance(last_info, dict) and last_info.get("timestamp"):
+        try:
+            last_ts_str = last_info["timestamp"]
+            last_dt = datetime.fromisoformat(last_ts_str.replace("Z", "+00:00"))
+            elapsed_seconds = int((now_utc - last_dt).total_seconds())
+
+            date_formatted = last_dt.strftime("%d-%b-%Y")
+            time_formatted = f"Last Sync - {last_dt.strftime('%H%M')} hrs"
+
+            days = elapsed_seconds // 86400
+            hours = (elapsed_seconds % 86400) // 3600
+            minutes = (elapsed_seconds % 3600) // 60
+
+            if days > 0:
+                elapsed_time = f"{days} day{'s' if days > 1 else ''} {hours} hr{'s' if hours > 1 else ''} ago"
+            elif hours > 0:
+                elapsed_time = f"{hours} hr{'s' if hours > 1 else ''} {minutes} min{'s' if minutes > 1 else ''} ago"
+            elif minutes > 0:
+                elapsed_time = f"{minutes} min{'s' if minutes > 1 else ''} ago"
+            else:
+                elapsed_time = "Just now"
+
+            last_sync_data = {
+                "timestamp": last_ts_str,
+                "date_formatted": date_formatted,
+                "time_formatted": time_formatted,
+                "elapsed_time": elapsed_time,
+                "elapsed_seconds": elapsed_seconds,
+                "status": last_info.get("status", "success"),
+            }
+        except Exception:
+            last_sync_data = {
+                "timestamp": None,
+                "date_formatted": "Not Synced Yet",
+                "time_formatted": "Last Sync - N/A",
+                "elapsed_time": "No previous sync recorded",
+                "elapsed_seconds": None,
+                "status": "none",
+            }
+    else:
+        last_sync_data = {
+            "timestamp": None,
+            "date_formatted": "Not Synced Yet",
+            "time_formatted": "Last Sync - N/A",
+            "elapsed_time": "No previous sync recorded",
+            "elapsed_seconds": None,
+            "status": "none",
+        }
+
+    # Query counts from SWMM database tables
+    unsynced_tx = SFDTransaction.objects.filter(is_synced=0).count()
+    unsynced_cr = ChangeEquipmentRequest.objects.filter(is_synced=0).count()
+    unsynced_rr = RemoveEquipmentRequest.objects.filter(is_synced=0).count()
+
+    in_progress_tx = SFDTransaction.objects.filter(is_synced=2).count()
+    in_progress_cr = ChangeEquipmentRequest.objects.filter(is_synced=2).count()
+    in_progress_rr = RemoveEquipmentRequest.objects.filter(is_synced=2).count()
+
+    not_synced_count = unsynced_tx + unsynced_cr + unsynced_rr
+    sync_in_queue_count = in_progress_tx + in_progress_cr + in_progress_rr
+
+    # Build Pending Synchronization feeds list matching UI design
+    pending_list = []
+
+    if unsynced_tx > 0:
+        pending_list.append({
+            "id": "sfd_transaction_feed",
+            "name": "SFD Equipment Detail Feed",
+            "description": "Equipment Ship Detail · retry queued",
+            "status": "Failed" if unsynced_tx > 3 else "Pending",
+            "action": "Retry" if unsynced_tx > 3 else "Queued",
+            "count": unsynced_tx,
+        })
+
+    if unsynced_cr > 0:
+        pending_list.append({
+            "id": "sfd_change_request_feed",
+            "name": "Equipment Change Request",
+            "description": "Change Equipment Request table",
+            "status": "Pending",
+            "action": "Queued",
+            "count": unsynced_cr,
+        })
+
+    if unsynced_rr > 0:
+        pending_list.append({
+            "id": "sfd_remove_request_feed",
+            "name": "Equipment Removal Registry",
+            "description": "Remove Equipment Request table",
+            "status": "Pending",
+            "action": "Queued",
+            "count": unsynced_rr,
+        })
+
+    if in_progress_tx > 0 or in_progress_cr > 0 or in_progress_rr > 0:
+        pending_list.append({
+            "id": "active_sync_queue",
+            "name": "Active Synchronization Queue",
+            "description": "Background queued items processing",
+            "status": "Queued",
+            "action": "Queued",
+            "count": sync_in_queue_count,
+        })
+
+    if not pending_list:
+        pending_list.append({
+            "id": "all_synced",
+            "name": "All Feeds Synchronized",
+            "description": "SWMM and CMMS master & transaction feeds are fully up-to-date",
+            "status": "Synced",
+            "action": "Up to Date",
+            "count": 0,
+        })
+
+    overall_sync_status = "synced"
+    if sync_in_queue_count > 0:
+        overall_sync_status = "in_progress"
+    elif not_synced_count > 0:
+        overall_sync_status = "not_synced"
+
+    return {
+        "status": "active",
+        "message": "Integration Services is up and running.",
+        "app": "integrationservices",
+        "sync_status": overall_sync_status,
+        "sync_summary": {
+            "last_sync": last_sync_data,
+            "sync_in_queue": sync_in_queue_count,
+            "not_synced": not_synced_count,
+            "total_pending_records": not_synced_count + sync_in_queue_count,
+        },
+        "pending_synchronization": pending_list,
+        "unsynced_counts": {
+            "T_EquipmentShipDetail": unsynced_tx,
+            "T_SFDChangeRequest": unsynced_cr,
+            "Ch_SFD_Remove_Equipment_Request": unsynced_rr,
+        },
+        "in_progress_counts": {
+            "T_EquipmentShipDetail": in_progress_tx,
+            "T_SFDChangeRequest": in_progress_cr,
+            "Ch_SFD_Remove_Equipment_Request": in_progress_rr,
+        },
+    }
