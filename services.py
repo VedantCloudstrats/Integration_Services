@@ -620,28 +620,14 @@ def pull_transaction_approvals():
         "Ch_SFD_Remove_Equipment_Request": {"pulled": 0, "approved": 0, "errors": []},
     }
 
-    # 1. Pull approvals for T_EquipmentShipDetail
-    # We pull only transaction rows that are currently pending approval locally (is_synced=2)
+    # 1. Pull transaction records for T_EquipmentShipDetail from CMMS into SWMM
     try:
-        pending_uids = list(
-            SFDTransaction.objects.filter(is_synced__in=[0, 2])
-            .exclude(universal_id_t_equipment_ship_detail__isnull=True)
-            .exclude(universal_id_t_equipment_ship_detail="")
-            .values_list("universal_id_t_equipment_ship_detail", flat=True)
-        )
-        if pending_uids:
-            placeholders = ", ".join(["?"] * len(pending_uids))
-            rows = fetch_cmms_table_data(
-                f"SELECT * FROM T_EquipmentShipDetail WHERE Universal_ID_T_EquipmentShipDetail IN ({placeholders})",
-                pending_uids,
-            )
-        else:
-            try:
-                rows = fetch_cmms_table_data(
-                    "SELECT * FROM T_EquipmentShipDetail WHERE Status = 1 OR IsSynced = 1"
-                )
-            except Exception:
-                rows = []
+        try:
+            rows = fetch_cmms_table_data("SELECT * FROM T_EquipmentShipDetail")
+            logger.info(f"Fetched {len(rows)} T_EquipmentShipDetail transaction rows from CMMS")
+        except Exception as fetch_err:
+            logger.error(f"Failed fetching T_EquipmentShipDetail from CMMS: {fetch_err}")
+            rows = []
         for row in rows:
             try:
                 payload = row
@@ -761,26 +747,14 @@ def pull_transaction_approvals():
         }
 
     # 2. Pull approvals for T_SFDChangeRequest
+    # 2. Pull approvals and requests for T_SFDChangeRequest from CMMS into SWMM
     try:
-        pending_uids = list(
-            ChangeEquipmentRequest.objects.filter(is_synced__in=[0, 2])
-            .exclude(universal_id_t_sfd_change_request__isnull=True)
-            .exclude(universal_id_t_sfd_change_request="")
-            .values_list("universal_id_t_sfd_change_request", flat=True)
-        )
-        if pending_uids:
-            placeholders = ", ".join(["?"] * len(pending_uids))
-            rows = fetch_cmms_table_data(
-                f"SELECT * FROM T_SFDChangeRequest WHERE Universal_ID_T_SFDChangeRequest IN ({placeholders})",
-                pending_uids,
-            )
-        else:
-            try:
-                rows = fetch_cmms_table_data(
-                    "SELECT * FROM T_SFDChangeRequest WHERE IsSynced = 1 OR Approved_Reject = 1"
-                )
-            except Exception:
-                rows = []
+        try:
+            rows = fetch_cmms_table_data("SELECT * FROM T_SFDChangeRequest")
+            logger.info(f"Fetched {len(rows)} T_SFDChangeRequest transaction rows from CMMS")
+        except Exception as fetch_err:
+            logger.error(f"Failed fetching T_SFDChangeRequest from CMMS: {fetch_err}")
+            rows = []
         for row in rows:
             try:
                 payload = row
@@ -852,27 +826,14 @@ def pull_transaction_approvals():
             "message": f"Failed pulling T_SFDChangeRequest approvals: {str(e)}",
         }
 
-    # 3. Pull approvals for Ch_SFD_Remove_Equipment_Request
+    # 3. Pull approvals and requests for Ch_SFD_Remove_Equipment_Request from CMMS into SWMM
     try:
-        pending_uids = list(
-            RemoveEquipmentRequest.objects.filter(is_synced__in=[0, 2])
-            .exclude(universal_id_ch_sfd_remove_equipment_request__isnull=True)
-            .exclude(universal_id_ch_sfd_remove_equipment_request="")
-            .values_list("universal_id_ch_sfd_remove_equipment_request", flat=True)
-        )
-        if pending_uids:
-            placeholders = ", ".join(["?"] * len(pending_uids))
-            rows = fetch_cmms_table_data(
-                f"SELECT * FROM Ch_SFD_Remove_Equipment_Request WHERE Universal_ID_Ch_SFD_Remove_Equipment_Request IN ({placeholders})",
-                pending_uids,
-            )
-        else:
-            try:
-                rows = fetch_cmms_table_data(
-                    "SELECT * FROM Ch_SFD_Remove_Equipment_Request WHERE Approved_Reject = 1 OR IsSynced = 1"
-                )
-            except Exception:
-                rows = []
+        try:
+            rows = fetch_cmms_table_data("SELECT * FROM Ch_SFD_Remove_Equipment_Request")
+            logger.info(f"Fetched {len(rows)} Ch_SFD_Remove_Equipment_Request transaction rows from CMMS")
+        except Exception as fetch_err:
+            logger.error(f"Failed fetching Ch_SFD_Remove_Equipment_Request from CMMS: {fetch_err}")
+            rows = []
         for row in rows:
             try:
                 lookup_val = row.get("Universal_ID_Ch_SFD_Remove_Equipment_Request")
@@ -1004,9 +965,9 @@ def run_unified_sync(steps=None):
     import time
     from datetime import datetime, timezone
 
-    allowed_steps = {"masters", "push", "approvals"}
+    allowed_steps = {"masters", "pull", "push", "approvals"}
     if not steps:
-        steps = ["masters", "push", "approvals"]
+        steps = ["masters", "pull", "push"]
     else:
         steps = [s for s in steps if s in allowed_steps]
 
@@ -1058,9 +1019,9 @@ def run_unified_sync(steps=None):
     any_error = False
 
     try:
-        # ── Phase 1: Master Data Pull ────────────────────────────────────────
+        # ── Phase 1: Master Data Pull (CMMS → SWMM) ──────────────────────────
         if "masters" in steps:
-            logger.info(f"[sync:{sync_id}] Phase 1 — Master Data Synchronization")
+            logger.info(f"[sync:{sync_id}] Phase 1 — Master Data Synchronization (CMMS → SWMM)")
             step_results["masters"] = _run_step("masters", pull_all_masters)
             if step_results["masters"]["status"] == "error":
                 any_error = True
@@ -1070,9 +1031,22 @@ def run_unified_sync(steps=None):
         else:
             step_results["masters"] = {"status": "skipped", "message": "Not requested"}
 
-        # ── Phase 2: Transaction Push ────────────────────────────────────────
+        # ── Phase 2: Transaction Pull (CMMS → SWMM) ──────────────────────────
+        if "pull" in steps or "approvals" in steps:
+            logger.info(f"[sync:{sync_id}] Phase 2 — Transaction Pull (CMMS → SWMM)")
+            step_results["pull"] = _run_step("pull", pull_transaction_approvals)
+            step_results["approvals"] = step_results["pull"]
+            if step_results["pull"]["status"] == "error":
+                any_error = True
+                logger.error(
+                    f"[sync:{sync_id}] Transaction pull failed: {step_results['pull']['message']}"
+                )
+        else:
+            step_results["pull"] = {"status": "skipped", "message": "Not requested"}
+
+        # ── Phase 3: Transaction Push (SWMM → CMMS) ──────────────────────────
         if "push" in steps:
-            logger.info(f"[sync:{sync_id}] Phase 2 — Transaction Push (SWMM → CMMS)")
+            logger.info(f"[sync:{sync_id}] Phase 3 — Transaction Push (SWMM → CMMS)")
             step_results["push"] = _run_step("push", push_to_cmms)
             if step_results["push"]["status"] == "error":
                 any_error = True
@@ -1081,18 +1055,6 @@ def run_unified_sync(steps=None):
                 )
         else:
             step_results["push"] = {"status": "skipped", "message": "Not requested"}
-
-        # ── Phase 3: Approval / Status Pull ─────────────────────────────────
-        if "approvals" in steps:
-            logger.info(f"[sync:{sync_id}] Phase 3 — Approval & Status Pull (CMMS → SWMM)")
-            step_results["approvals"] = _run_step("approvals", pull_transaction_approvals)
-            if step_results["approvals"]["status"] == "error":
-                any_error = True
-                logger.error(
-                    f"[sync:{sync_id}] Approval pull failed: {step_results['approvals']['message']}"
-                )
-        else:
-            step_results["approvals"] = {"status": "skipped", "message": "Not requested"}
 
         # ── Compute overall status ───────────────────────────────────────────
         statuses = [
