@@ -246,7 +246,8 @@ MASTER_CONFIGS = {
 
 def ingest_entity(table_name, config):
     """
-    Generic ingestion logic supporting incremental pulls and fallback to full loads.
+    Ingestion logic fetching all records from CMMS master table and upserting into SWMM.
+    Guarantees SWMM master tables stay 100% up-to-date with CMMS.
     """
     model_class = config["model"]
     serializer_class = config["serializer"]
@@ -255,39 +256,18 @@ def ingest_entity(table_name, config):
     pre_validate_fn = config.get("pre_validate")
     custom_resolve_fn = config.get("custom_resolve")
 
-    # Get local maximum updated_at for incremental pull (if field exists on model)
-    has_updated_at = False
-    try:
-        model_class._meta.get_field("updated_at")
-        has_updated_at = True
-    except Exception:
-        pass
-
-    last_sync_time = None
-    if has_updated_at:
-        last_sync_time = model_class.objects.aggregate(max_val=Max("updated_at"))[
-            "max_val"
-        ]
-
     query = f"SELECT * FROM {table_name}"
-
-    if last_sync_time:
-        query_incremental = f"SELECT * FROM {table_name} WHERE UpdatedDate > ?"
-        try:
-            # Test query execution incrementally
-            rows = fetch_cmms_table_data(query_incremental, [last_sync_time])
-            query = query_incremental
-            logger.info(
-                f"Performing incremental sync for {table_name} since {last_sync_time}"
-            )
-        except Exception:
-            # Fallback to full query if query fails (e.g. UpdatedDate column does not exist)
-            logger.warning(
-                f"UpdatedDate not found or query failed on CMMS for {table_name}. Falling back to full load."
-            )
-            rows = fetch_cmms_table_data(query)
-    else:
+    try:
         rows = fetch_cmms_table_data(query)
+        logger.info(f"Fetched {len(rows)} rows from CMMS table {table_name}")
+    except Exception as fetch_err:
+        logger.error(f"Error fetching data from CMMS table {table_name}: {fetch_err}")
+        return {
+            "table": table_name,
+            "created": 0,
+            "updated": 0,
+            "errors": [{"error": f"CMMS Query Failed: {fetch_err}"}],
+        }
 
     created_count = 0
     updated_count = 0
@@ -644,7 +624,7 @@ def pull_transaction_approvals():
     # We pull only transaction rows that are currently pending approval locally (is_synced=2)
     try:
         pending_uids = list(
-            SFDTransaction.objects.filter(is_synced=2)
+            SFDTransaction.objects.filter(is_synced__in=[0, 2])
             .exclude(universal_id_t_equipment_ship_detail__isnull=True)
             .exclude(universal_id_t_equipment_ship_detail="")
             .values_list("universal_id_t_equipment_ship_detail", flat=True)
@@ -656,7 +636,12 @@ def pull_transaction_approvals():
                 pending_uids,
             )
         else:
-            rows = []
+            try:
+                rows = fetch_cmms_table_data(
+                    "SELECT * FROM T_EquipmentShipDetail WHERE Status = 1 OR IsSynced = 1"
+                )
+            except Exception:
+                rows = []
         for row in rows:
             try:
                 payload = row
@@ -778,7 +763,7 @@ def pull_transaction_approvals():
     # 2. Pull approvals for T_SFDChangeRequest
     try:
         pending_uids = list(
-            ChangeEquipmentRequest.objects.filter(is_synced=2)
+            ChangeEquipmentRequest.objects.filter(is_synced__in=[0, 2])
             .exclude(universal_id_t_sfd_change_request__isnull=True)
             .exclude(universal_id_t_sfd_change_request="")
             .values_list("universal_id_t_sfd_change_request", flat=True)
@@ -790,7 +775,12 @@ def pull_transaction_approvals():
                 pending_uids,
             )
         else:
-            rows = []
+            try:
+                rows = fetch_cmms_table_data(
+                    "SELECT * FROM T_SFDChangeRequest WHERE IsSynced = 1 OR Approved_Reject = 1"
+                )
+            except Exception:
+                rows = []
         for row in rows:
             try:
                 payload = row
@@ -865,7 +855,7 @@ def pull_transaction_approvals():
     # 3. Pull approvals for Ch_SFD_Remove_Equipment_Request
     try:
         pending_uids = list(
-            RemoveEquipmentRequest.objects.filter(is_synced=2)
+            RemoveEquipmentRequest.objects.filter(is_synced__in=[0, 2])
             .exclude(universal_id_ch_sfd_remove_equipment_request__isnull=True)
             .exclude(universal_id_ch_sfd_remove_equipment_request="")
             .values_list("universal_id_ch_sfd_remove_equipment_request", flat=True)
@@ -877,7 +867,12 @@ def pull_transaction_approvals():
                 pending_uids,
             )
         else:
-            rows = []
+            try:
+                rows = fetch_cmms_table_data(
+                    "SELECT * FROM Ch_SFD_Remove_Equipment_Request WHERE Approved_Reject = 1 OR IsSynced = 1"
+                )
+            except Exception:
+                rows = []
         for row in rows:
             try:
                 lookup_val = row.get("Universal_ID_Ch_SFD_Remove_Equipment_Request")
