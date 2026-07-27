@@ -1011,7 +1011,12 @@ def run_unified_sync(steps=None):
         steps = [s for s in steps if s in allowed_steps]
 
     # ── Concurrency guard ────────────────────────────────────────────────────
-    lock_acquired = cache.add(LOCK_KEY, "true", timeout=900)
+    lock_acquired = True
+    try:
+        lock_acquired = cache.add(LOCK_KEY, "true", timeout=900)
+    except Exception as exc:
+        logger.warning(f"Cache lock check encountered exception: {exc}. Continuing sync execution.")
+
     if not lock_acquired:
         logger.warning("Unified sync requested but a sync is already in progress.")
         return {
@@ -1152,7 +1157,10 @@ def run_unified_sync(steps=None):
         }
 
     finally:
-        cache.delete(LOCK_KEY)
+        try:
+            cache.delete(LOCK_KEY)
+        except Exception:
+            pass
         logger.info(f"[sync:{sync_id}] Concurrency lock released.")
 
 
